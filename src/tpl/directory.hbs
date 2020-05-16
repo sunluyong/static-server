@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Directory</title>
+  <link rel="stylesheet" type="text/css" href="//at.alicdn.com/t/font_1823506_qd1x7w67zd.css">
+  <style>
+    a.iconfont {
+      margin: 10px;
+      display: block;
+      font-size: 24px;
+      text-decoration: none;
+      color: blue;
+    }
+
+    .iconfont::before{
+      padding-right: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  {{#each list}}
+    <a class="iconfont icon-{{type}}" href="{{path}}">{{name}}</a>
+  {{/each}}
+</body>
+
+</html>
