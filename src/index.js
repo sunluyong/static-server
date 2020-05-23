@@ -9,6 +9,7 @@ const compressible = require('compressible');
 const accepts = require('accepts');
 
 const defaultConf = require('./config');
+const handleCache = require('./cache');
 
 const htmlTpl = fs.readFileSync(path.join(__dirname, './tpl/directory.hbs'));
 const template = handlebars.compile(htmlTpl.toString());
@@ -37,7 +38,7 @@ class StaticServer {
           res.writeHead(404, {
             'Content-Type': 'text/html',
           });
-          res.end('文件不存在！');
+          res.end(`${url} 文件不存在！`);
 
         } else {
           const stats = fs.statSync(filePath);
@@ -77,9 +78,12 @@ class StaticServer {
             res.end(html);
 
           } else {
-            const contentType = mime.contentType(path.extname(url));
-            let compression;
+            handleCache(req, res);
 
+            const contentType = mime.contentType(path.extname(url));
+            res.setHeader('Content-Type', contentType);
+
+            let compression;
             if (compressible(contentType)) {
               const encodings = accepts(req).encodings();
               const serverCompatibleCompressions = [
@@ -97,18 +101,16 @@ class StaticServer {
               }
             }
 
-            if (compression) {
-              res.writeHead(200, {
-                'Content-Type': contentType,
+            if (res.statusCode !== 304) {
+              if (compression) {
                 // 指定服务器使用的压缩方式，浏览器使用对应的解压方式
-                'Content-Encoding': compression.method,
-              });
-              fs.createReadStream(filePath).pipe(compression.stream).pipe(res);
+                res.setHeader('Content-Encoding', compression.method);
+                fs.createReadStream(filePath).pipe(compression.stream).pipe(res);
+              } else {
+                fs.createReadStream(filePath).pipe(res);
+              }
             } else {
-              res.writeHead(200, {
-                'Content-Type': contentType,
-              });
-              fs.createReadStream(filePath).pipe(res);
+              res.end('');
             }
           }
         }
