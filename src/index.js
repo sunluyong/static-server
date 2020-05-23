@@ -4,6 +4,9 @@ const path = require('path');
 const mime = require('mime-types');
 const handlebars = require('handlebars');
 const compare = require('natural-compare');
+const zlib = require('zlib');
+const compressible = require('compressible');
+const accepts = require('accepts');
 
 const defaultConf = require('./config');
 
@@ -22,7 +25,7 @@ class StaticServer {
       const { url, method } = req;
       if (method !== 'GET') {
         res.writeHead(404, {
-          'content-type': 'text/html',
+          'Content-Type': 'text/html',
         });
         res.end('请使用 GET 方法访问文件！');
         return false;
@@ -32,7 +35,7 @@ class StaticServer {
       fs.access(filePath, fs.constants.R_OK, err => {
         if (err) {
           res.writeHead(404, {
-            'content-type': 'text/html',
+            'Content-Type': 'text/html',
           });
           res.end('文件不存在！');
 
@@ -54,7 +57,7 @@ class StaticServer {
             dir.close();
 
             res.writeHead(200, {
-              'content-type': 'text/html',
+              'Content-Type': 'text/html',
             });
 
             // 对文件顺序重排，文件夹在文件前面，相同类型按字母排序，不区分大小写
@@ -74,10 +77,39 @@ class StaticServer {
             res.end(html);
 
           } else {
-            res.writeHead(200, {
-              'content-type': mime.contentType(path.extname(url)),
-            });
-            fs.createReadStream(filePath).pipe(res);
+            const contentType = mime.contentType(path.extname(url));
+            let compression;
+
+            if (compressible(contentType)) {
+              const encodings = accepts(req).encodings();
+              const serverCompatibleCompressions = [
+                { method: 'gzip', stream: zlib.createGzip() },
+                { method: 'deflate', stream: zlib.createDeflate() },
+                { method: 'br', stream: zlib.createBrotliCompress() },
+              ];
+
+              // 按照浏览器指定优先级在服务器选择压缩方式
+              for (let i = 0; i < encodings.length; i++) {
+                compression = serverCompatibleCompressions.find(com => com.method === encodings[i]);
+                if (compression) {
+                  break;
+                }
+              }
+            }
+
+            if (compression) {
+              res.writeHead(200, {
+                'Content-Type': contentType,
+                // 指定服务器使用的压缩方式，浏览器使用对应的解压方式
+                'Content-Encoding': compression.method,
+              });
+              fs.createReadStream(filePath).pipe(compression.stream).pipe(res);
+            } else {
+              res.writeHead(200, {
+                'Content-Type': contentType,
+              });
+              fs.createReadStream(filePath).pipe(res);
+            }
           }
         }
       });
